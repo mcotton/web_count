@@ -1,9 +1,10 @@
 <% var title = 'Authentication Example' %>
 <% include head %>
+<div class="message"><%- message %></div>
 
+<span class="block">
 <h1>Login</h1>
-<%- message %>
-Try accessing <a href="/restricted">/restricted</a>, then authenticate with "tj" and "foobar".
+Username and Password
 <form method="post" action="/login">
   <p>
     <label>Username:</label>
@@ -11,11 +12,30 @@ Try accessing <a href="/restricted">/restricted</a>, then authenticate with "tj"
   </p>
   <p>
     <label>Password:</label>
-    <input type="text" name="password">
+    <input type="password" name="password">
   </p>
   <p>
     <input type="submit" value="Login">
   </p>
 </form>
+</span>
+
+<span class="block">
+<h1>Sign up</h1>
+Create a new user
+<form method="post" action="/create">
+  <p>
+    <label>Username:</label>
+    <input type="text" name="username">
+  </p>
+  <p>
+    <label>Password:</label>
+    <input type="password" name="password">
+  </p>
+  <p>
+    <input type="submit" value="Sign up">
+  </p>
+</form>
+</span>
 
 <% include foot %>

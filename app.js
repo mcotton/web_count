@@ -15,6 +15,8 @@ var hash = require('pwd').hash;
 
 var app = express();
 
+var users = {}
+
 // all environments
 app.set('port', process.env.PORT || 3000);
 app.set('views', __dirname + '/views');
@@ -52,33 +54,25 @@ app.use(function(req, res, next) {
 	delete req.session.error;
 	delete req.session.success;
 	res.locals.message = '';
-	if(err) res.locals.message = '<p class="msg_error">' + err + '</p>';
-	if(msg) res.locals.message = '<p class="msg_success">' + msg + '</p>';
+	if(err) res.locals.message = '<p class="error">' + err + '</p>';
+	if(msg) res.locals.message = '<p class="success">' + msg + '</p>';
 	next();
 });
 
-// dummy database
-var users = {
-	tj: { name: 'tj' }
-}
 
 function authenticate(name, pass, fn) {
-	if(!module.parent) console.log('authenticating %s %s', name, pass);
-	var user = users[name]
-	if(!user) fn(new Error('could not find user named ' + name));
-	hash(pass, user.salt, function(err, hash) {
-		if(err) return fn(err);
-		console.log('hash     : ' + hash)
-		console.log('user.hash: ' + user.hash)
-		console.log('hash.length:      ' + hash.length)
-		console.log('user.hash.length: ' + user.hash.length)
-		console.log(hash == users[name].hash)
-		if(hash == user.hash) {
-				console.log('hash == user.hash')
-				return fn(null, user);
-		} else {
-			fn(new Error('invalid password'));
-		}
+	// ask redis for user
+	db.get('users:' + name, function(err, user) {
+		user = JSON.parse(user)
+		if(!user) return fn(new Error('could not find user named ' + name));
+		hash(pass, user.salt, function(err, hash) {
+			if(err) return fn(err);
+			if(hash == user.hash) {
+					return fn(null, user);
+			} else {
+				fn(new Error('invalid password'));
+			}
+		});
 	});
 }
 
@@ -106,9 +100,6 @@ app.get('/', routes.index);
 app.get('/login', user.login);
 app.post('/login', function(req, res) {
 	authenticate(req.body.username, req.body.password, function(err, user) {
-		console.log('user: ' + user)
-		console.log('username: ' + req.body.username)
-		console.log('password: ' + req.body.password)
 		if(user) {
 			// Regenerate session when signing in
 			// to prevent fixation 
@@ -124,9 +115,7 @@ app.post('/login', function(req, res) {
 			});
 		} else {
 			console.log('err:' + err)
-      		req.session.error = 'Authentication failed, please check your '
-        		+ ' username and password.'
-        		+ ' (use "tj" and "foobar")';
+      		req.session.error = 'Authentication failed, please check your username and password.'
       		res.redirect('login');
     	}
 	})
@@ -134,18 +123,31 @@ app.post('/login', function(req, res) {
 app.get('/logout', user.logout);
 app.get('/restricted', restrict, user.restricted);
 app.get('/users', user.list);
-app.get('/create', function(req, res) {
-	// when you create a user, generate a salt
-	// and hash the password, 'foobar' is the password here
-	hash('foobar', function(err, salt, hash) {
-		if(err) throw(err);
-		// store the salt and hash in the database
-		users.tj.salt = salt
-		users.tj.hash = hash
-		res.send('user tj now has a salt: ' + salt + ' and hash: ' + hash)
+app.get('/create', user.create);
+app.post('/create', function(req, res) {
+	db.incr('autoid', function() {
+		db.get('autoid', function(err, autoid) {
+			// when you create a user, generate a salt
+			// and hash the password, 'foobar' is the password here
+			hash(req.body.password, function(err, salt, hash) {
+				if(err) throw(err);
+				// store the salt and hash in the database
+				users[req.body.username] = {
+					'id': 	autoid,
+					'name': req.body.username,
+					'salt': salt,
+					'hash': hash
+				}
+				db.set('users:' + req.body.username, JSON.stringify(users[req.body.username]))
+				res.send('user ' + req.body.username + ' created (salt: ' + salt + ' and hash: ' + hash + ')' )
+			});
+		});
 	});
 });
 
 http.createServer(app).listen(app.get('port'), function(){
-  console.log('Express server listening on port ' + app.get('port'));
+	console.log('Express server listening on port ' + app.get('port'));
 });
+
+
+

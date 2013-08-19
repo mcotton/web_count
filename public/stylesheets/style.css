@@ -6,3 +6,17 @@ body {
 a {
   color: #00B7FF;
 }
+
+.block {
+	width: 			45%;
+	min-width: 		300px;
+	display: 		inline-block;
+}
+
+.error {
+	color: red
+}
+
+.success {
+	color: green;
+}
