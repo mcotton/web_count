@@ -12,7 +12,7 @@ var path = require('path');
 var redis = require('redis');
 var db = redis.createClient();
 var hash = require('pwd').hash;
-
+var u = require('underscore');
 var app = express();
 
 var users = {}
@@ -81,8 +81,9 @@ function restrict(req, res, next) {
 	if(req.session.user) {
 		next();
 	} else {
-		req.session.error = "Access Denied";
-		res.redirect('/login');
+		res.json(401, { 'error': 'unauthorized' })
+		//req.session.error = "Access Denied";
+		//res.redirect('/login');
 	}
 }
 
@@ -122,26 +123,39 @@ app.post('/login', function(req, res) {
 });
 app.get('/logout', user.logout);
 app.get('/restricted', restrict, user.restricted);
-app.get('/users', user.list);
+app.get('/users', restrict, user.list);
 app.get('/create', user.create);
 app.post('/create', function(req, res) {
-	db.incr('autoid', function() {
-		db.get('autoid', function(err, autoid) {
-			// when you create a user, generate a salt
-			// and hash the password, 'foobar' is the password here
-			hash(req.body.password, function(err, salt, hash) {
-				if(err) throw(err);
-				// store the salt and hash in the database
-				users[req.body.username] = {
-					'id': 	autoid,
-					'name': req.body.username,
-					'salt': salt,
-					'hash': hash
-				}
-				db.set('users:' + req.body.username, JSON.stringify(users[req.body.username]))
-				res.send('user ' + req.body.username + ' created (salt: ' + salt + ' and hash: ' + hash + ')' )
+	db.sismember('set:usernames', req.body.username, function(err, data) { 
+		if(data === 0) {
+			db.incr('autoid', function() {
+				db.get('autoid', function(err, autoid) {
+					// when you create a user, generate a salt
+					// and hash the password, 'foobar' is the password here
+					hash(req.body.password, function(err, salt, hash) {
+						if(err) throw(err);
+						// store the salt and hash in the database
+						users[req.body.username] = {
+							'id': 	autoid,
+							'name': req.body.username,
+							'salt': salt,
+							'hash': hash
+						}
+						db.set('users:' + req.body.username, JSON.stringify(u.omit(users[req.body.username], 'hash', 'salt')))
+						db.set('users:' + autoid, req.body.username)
+						db.sadd('set:usernames', req.body.username)
+						db.get('users:' + req.body.username, function(err, data) {
+							if(err) res.json(400, null)
+							if(data) res.json(201, data)	
+						})
+						
+					});
+				});
 			});
-		});
+		} else {
+			// there was an error of record already exists
+			res.json(400, null);
+		}
 	});
 });
 

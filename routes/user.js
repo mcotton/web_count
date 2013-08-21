@@ -3,8 +3,14 @@
  * GET users listing.
  */
 
+var redis = require('redis');
+var db = redis.createClient();
+
 exports.list = function(req, res){
-  res.send("respond with a resource");
+  db.smembers('set:usernames', function(err, data) { 
+  	if(err)  res.json(400, { 'error': err })
+  	if(data) res.json({ 'users': data }) 
+  });
 };
 
 exports.login = function(req, res) {
