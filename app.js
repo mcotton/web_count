@@ -63,15 +63,18 @@ app.use(function(req, res, next) {
 function authenticate(name, pass, fn) {
 	// ask redis for user
 	db.get('users:' + name, function(err, user) {
-		user = JSON.parse(user)
+		var user = JSON.parse(user)
 		if(!user) return fn(new Error('could not find user named ' + name));
-		hash(pass, user.salt, function(err, hash) {
-			if(err) return fn(err);
-			if(hash == user.hash) {
-					return fn(null, user);
-			} else {
-				fn(new Error('invalid password'));
-			}
+		db.get('users:' + user.id, function(err, userid) {
+			var userid = JSON.parse(userid)
+			hash(pass, userid.salt, function(err, hash) {
+				if(err) return fn(err);
+				if(hash == userid.hash) {
+						return fn(null, userid);
+				} else {
+					fn(new Error('invalid password'));
+				}
+			});
 		});
 	});
 }
@@ -123,7 +126,9 @@ app.post('/login', function(req, res) {
 });
 app.get('/logout', user.logout);
 app.get('/restricted', restrict, user.restricted);
-app.get('/users', restrict, user.list);
+app.get('/users', restrict, user.curr_user);
+app.get('/users/all', restrict, user.list);
+app.get('/users/:id', restrict, user.userById);
 app.get('/create', user.create);
 app.post('/create', function(req, res) {
 	db.sismember('set:usernames', req.body.username, function(err, data) { 
@@ -142,7 +147,7 @@ app.post('/create', function(req, res) {
 							'hash': hash
 						}
 						db.set('users:' + req.body.username, JSON.stringify(u.omit(users[req.body.username], 'hash', 'salt')))
-						db.set('users:' + autoid, req.body.username)
+						db.set('users:' + autoid, JSON.stringify(users[req.body.username]))
 						db.sadd('set:usernames', req.body.username)
 						db.get('users:' + req.body.username, function(err, data) {
 							if(err) res.json(400, null)
