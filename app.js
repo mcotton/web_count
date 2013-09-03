@@ -11,6 +11,7 @@ var path = require('path');
 
 var redis = require('redis');
 var db = redis.createClient();
+var RedisStore = require('connect-redis')(express);
 var hash = require('pwd').hash;
 var u = require('underscore');
 var app = express();
@@ -45,7 +46,7 @@ app.use(express.logger('dev'));
 app.use(express.bodyParser());
 app.use(express.methodOverride());
 app.use(express.cookieParser('A horse is a horse, of course, of course.  Unless, of course, that horse is the famous Mr. Ed.'));
-app.use(express.session());
+app.use(express.session({ store: new RedisStore, secret: 'A horse is a horse, of course, of course.  Unless, of course, that horse is the famous Mr. Ed.' }));
 
 // session-persisted session middleware
 app.use(function(req, res, next) {
@@ -141,10 +142,12 @@ app.post('/create', function(req, res) {
 						if(err) throw(err);
 						// store the salt and hash in the database
 						users[req.body.username] = {
-							'id': 	autoid,
-							'name': req.body.username,
-							'salt': salt,
-							'hash': hash
+							'id': 				autoid,
+							'name': 			req.body.username,
+							'salt': 			salt,
+							'hash': 			hash,
+							'firstname': 	req.body.firstname || '',
+							'lastname': 	req.body.lastname || '' 
 						}
 						db.set('users:' + req.body.username, JSON.stringify(u.omit(users[req.body.username], 'hash', 'salt')))
 						db.set('users:' + autoid, JSON.stringify(users[req.body.username]))
